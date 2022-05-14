@@ -63,6 +63,7 @@ class BPlusTree {
     void insert(int key, int value);
     void remove(int key);
     void print_tree() const;
+    void print_leaves() const;
 
    private:
     LeafNode* find_leaf(int key) const;

@@ -390,6 +390,22 @@ void BPlusTree::print_tree() const {
     std::cout << std::endl;
 }
 
+void BPlusTree::print_leaves() const {
+    if (!root) return;
+    Node* cur = root;
+    while (!cur->is_leaf) {
+        InternalNode* nonleaf = static_cast<InternalNode*>(cur);
+        cur = nonleaf->nodes[0];
+    }
+    LeafNode* cur_leaf = static_cast<LeafNode*>(cur);
+    while (cur_leaf) {
+        for (int i = 0; i < cur_leaf->num_keys; i++)
+            std::cout << cur_leaf->records[i]->value << " ";
+        std::cout << std::endl;
+        cur_leaf = cur_leaf->next;
+    }
+}
+
 void BPlusTree::print_node(Node* n) const {
     if (!n) return;
     if (!n->is_leaf) {
