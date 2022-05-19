@@ -2,164 +2,8 @@
 
 #include <iostream>
 
-void LeafNode::insert(int key, Record* record) {
-    int insertion_point = 0;
-    while (insertion_point < num_keys && records[insertion_point]->key < key)
-        insertion_point++;
-
-    for (int i = num_keys; i > insertion_point; i--) {
-        records[i] = records[i - 1];
-    }
-    records[insertion_point] = record;
-    num_keys++;
-}
-
-Node* LeafNode::insert_after_splitting(int key, Record* record) {
-    LeafNode* new_leaf = new LeafNode;
-    std::array<Record*, ORDER> temp_records;
-
-    int insertion_index = 0;
-    while (insertion_index < ORDER - 1 && records[insertion_index]->key < key)
-        insertion_index++;
-
-    for (int i = 0, j = 0; i < num_keys; i++, j++) {
-        if (j == insertion_index) j++;
-        temp_records[j] = records[i];
-    }
-    temp_records[insertion_index] = record;
-
-    records.fill(nullptr);
-    num_keys = 0;
-
-    for (int i = 0, j = 0; i < MAX_NUM_KEYS + 1; i++) {
-        if (i <= HALF_NUM_KEYS) {
-            records[i] = temp_records[i];
-            num_keys++;
-        } else {
-            new_leaf->records[j] = temp_records[i];
-            new_leaf->num_keys++;
-            j++;
-        }
-    }
-    new_leaf->next = next;
-    next = new_leaf;
-
-    new_leaf->parent = parent;
-    int new_key = new_leaf->records[0]->key;
-
-    return insert_in_parent(new_key, new_leaf);
-}
-
-Node* LeafNode::insert_in_parent(int key, Node* right) {
-    if (!parent) return new InternalNode(this, key, right);
-    InternalNode* parent_n = static_cast<InternalNode*>(parent);
-
-    int left_index = 0;
-    while (left_index <= parent->num_keys &&
-           parent_n->nodes[left_index] != this)
-        left_index++;
-    if (parent_n->num_keys < ORDER - 1) {
-        parent_n->insert(left_index, key, right);
-        return nullptr;
-    }
-
-    return parent_n->insert_after_splitting(left_index, key, right);
-}
-
-void InternalNode::insert(int left_index, int key, Node* right) {
-    for (int i = num_keys; i > left_index; i--) {
-        nodes[i + 1] = nodes[i];
-        keys[i] = keys[i - 1];
-    }
-    nodes[left_index + 1] = right;
-    keys[left_index] = key;
-    num_keys++;
-    return;
-}
-
-Node* InternalNode::insert_after_splitting(int left_index, int key,
-                                           Node* right) {
-    std::array<Node*, ORDER + 1> temp_pointers;
-    std::array<int, MAX_NUM_KEYS + 1> temp_keys;
-
-    for (int i = 0, j = 0; i < num_keys + 1; i++, j++) {
-        if (j == left_index + 1) j++;
-        temp_pointers[j] = nodes[i];
-    }
-    for (int i = 0, j = 0; i < num_keys; i++, j++) {
-        if (j == left_index) j++;
-        temp_keys[j] = keys[i];
-    }
-    temp_pointers[left_index + 1] = right;
-    temp_keys[left_index] = key;
-
-    InternalNode* new_node = new InternalNode;
-    num_keys = 0;
-    keys.fill(-1);
-    int i, j;
-    for (i = 0; i < HALF_NUM_KEYS; i++) {
-        nodes[i] = temp_pointers[i];
-        keys[i] = temp_keys[i];
-        num_keys++;
-    }
-    nodes[i] = temp_pointers[i];
-    int k_prime = temp_keys[HALF_NUM_KEYS];
-    for (++i, j = 0; i < ORDER; i++, j++) {
-        new_node->nodes[j] = temp_pointers[i];
-        new_node->keys[j] = temp_keys[i];
-        new_node->num_keys++;
-    }
-    new_node->nodes[j] = temp_pointers[i];
-    new_node->parent = parent;
-    Node* child;
-    for (i = 0; i <= new_node->num_keys; i++) {
-        child = (Node*)new_node->nodes[i];
-        child->parent = new_node;
-    }
-
-    return this->insert_in_parent(k_prime, new_node);
-}
-
-Node* InternalNode::insert_in_parent(int key, Node* right) {
-    InternalNode* parent_n = static_cast<InternalNode*>(this->parent);
-    if (!parent_n) return new InternalNode(this, key, right);
-
-    int left_index = 0;
-    while (left_index <= parent->num_keys &&
-           parent_n->nodes[left_index] != this)
-        left_index++;
-    if (parent_n->num_keys < ORDER - 1) {
-        parent_n->insert(left_index, key, right);
-        return nullptr;
-    }
-
-    return parent_n->insert_after_splitting(left_index, key, right);
-}
-
-LeafNode* BPlusTree::find_leaf(int key) const {
-    if (!root) return nullptr;
-
-    Node* cur = root;
-    while (!cur->is_leaf) {
-        InternalNode* nonleaf = static_cast<InternalNode*>(cur);
-        int i = 0;
-        while (i < cur->num_keys) {
-            if (key >= nonleaf->keys[i])
-                i++;
-            else
-                break;
-        }
-        cur = nonleaf->nodes[i];
-    }
-    return static_cast<LeafNode*>(cur);
-}
-
-LeafNode* BPlusTree::start_new_tree(int key, Record* record) {
-    LeafNode* root = new LeafNode;
-    root->records[0] = record;
-    root->num_keys++;
-    return root;
-}
+#include "internal_node.hpp"
+#include "leaf_node.hpp"
 
 BPlusTree::BPlusTree() { root = nullptr; }
 
@@ -207,6 +51,53 @@ void BPlusTree::remove(int key) {
         root = delete_entry(leaf, key, key_record);
     }
     return;
+}
+
+void BPlusTree::print_tree() const {
+    if (!root) return;
+    print_node(root);
+    std::cout << std::endl;
+}
+
+void BPlusTree::print_leaves() const {
+    if (!root) return;
+    Node* cur = root;
+    while (!cur->is_leaf) {
+        InternalNode* nonleaf = static_cast<InternalNode*>(cur);
+        cur = nonleaf->nodes[0];
+    }
+    LeafNode* cur_leaf = static_cast<LeafNode*>(cur);
+    while (cur_leaf) {
+        for (int i = 0; i < cur_leaf->num_keys; i++)
+            std::cout << cur_leaf->records[i]->value << " ";
+        std::cout << std::endl;
+        cur_leaf = cur_leaf->next;
+    }
+}
+
+LeafNode* BPlusTree::find_leaf(int key) const {
+    if (!root) return nullptr;
+
+    Node* cur = root;
+    while (!cur->is_leaf) {
+        InternalNode* nonleaf = static_cast<InternalNode*>(cur);
+        int i = 0;
+        while (i < cur->num_keys) {
+            if (key >= nonleaf->keys[i])
+                i++;
+            else
+                break;
+        }
+        cur = nonleaf->nodes[i];
+    }
+    return static_cast<LeafNode*>(cur);
+}
+
+LeafNode* BPlusTree::start_new_tree(int key, Record* record) {
+    LeafNode* root = new LeafNode;
+    root->records[0] = record;
+    root->num_keys++;
+    return root;
 }
 
 Node* BPlusTree::delete_entry(Node* n, int key, void* p) {
@@ -382,28 +273,6 @@ Node* BPlusTree::delete_entry(Node* n, int key, void* p) {
         }
     }
     return root;
-}
-
-void BPlusTree::print_tree() const {
-    if (!root) return;
-    print_node(root);
-    std::cout << std::endl;
-}
-
-void BPlusTree::print_leaves() const {
-    if (!root) return;
-    Node* cur = root;
-    while (!cur->is_leaf) {
-        InternalNode* nonleaf = static_cast<InternalNode*>(cur);
-        cur = nonleaf->nodes[0];
-    }
-    LeafNode* cur_leaf = static_cast<LeafNode*>(cur);
-    while (cur_leaf) {
-        for (int i = 0; i < cur_leaf->num_keys; i++)
-            std::cout << cur_leaf->records[i]->value << " ";
-        std::cout << std::endl;
-        cur_leaf = cur_leaf->next;
-    }
 }
 
 void BPlusTree::print_node(Node* n) const {
